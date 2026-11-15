@@ -1,98 +1,112 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { ActionButton } from '@/components/action-button';
+import { BluetoothMark } from '@/components/bluetooth-mark';
+import { ScreenContainer, ScreenTitle } from '@/components/screen-container';
+import { strings } from '@/constants/strings';
+import { useDebugCombo, useDebugUnlocked } from '@/hooks/use-debug-unlock';
+import { palette } from '@/theme/palette';
+import { tokens } from '@/theme/tokens';
+import { useBluetoothConnection } from '@/bluetooth/bluetooth-connection';
+import { useHc05Discovery } from '@/hooks/use-hc05-discovery';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+export default function ConnectScreen() {
+  const { status, statusLabel, detail, canConnect, target, searchAgain, stopDiscovery } = useHc05Discovery();
+  const { phase, error, connect, clearError } = useBluetoothConnection();
+  const connecting = phase === 'connecting' || phase === 'connected';
+  const debugUnlocked = useDebugUnlocked();
+  const { registerTitleTap } = useDebugCombo();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (phase === 'connected') {
+        router.replace('/station');
+      }
+    }, [phase]),
   );
-}
 
-export default function HomeScreen() {
+  const onConnect = async () => {
+    if (!target || connecting) {
+      return;
+    }
+
+    clearError();
+    await stopDiscovery();
+    await connect(target);
+  };
+
+  const onSearchAgain = () => {
+    clearError();
+    searchAgain();
+  };
+
+  const statusText = connecting ? strings.bluetooth.connecting : statusLabel;
+  const detailText = connecting ? strings.bluetooth.connectingDetail : error ?? detail;
+  const detailIsError = !connecting && (error !== null || status === 'error');
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <ScreenContainer>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScreenTitle onPress={registerTitleTap} />
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+        <View style={styles.body}>
+          <BluetoothMark />
+          <Text style={styles.status}>{statusText}</Text>
+          {detailText ? <Text style={[styles.detail, detailIsError ? styles.detailError : null]}>{detailText}</Text> : null}
+        </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        <View style={styles.actions}>
+          <ActionButton label={strings.bluetooth.connect} disabled={!canConnect || connecting} onPress={() => void onConnect()} />
+          {status === 'notFound' && !connecting ? (
+            <ActionButton label={strings.bluetooth.searchAgain} variant="secondary" onPress={onSearchAgain} />
+          ) : null}
+        </View>
+      </ScrollView>
+      {debugUnlocked ? (
+        <View style={styles.debugAction}>
+          <ActionButton label={strings.debug.open} variant="secondary" onPress={() => router.push('/debug')} />
+        </View>
+      ) : null}
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
-  safeArea: {
+  scrollContent: {
+    flexGrow: 1,
+  },
+  body: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    gap: tokens.space.md,
+    paddingHorizontal: tokens.space.sm,
   },
-  title: {
+  status: {
+    color: palette.text,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
     textAlign: 'center',
   },
-  code: {
-    textTransform: 'uppercase',
+  detail: {
+    color: palette.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  detailError: {
+    color: palette.error,
+  },
+  actions: {
+    gap: tokens.space.sm,
+  },
+  debugAction: {
+    marginTop: tokens.space.md,
   },
 });

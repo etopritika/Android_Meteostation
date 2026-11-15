@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-bluetooth-classic/android/build.gradle b/node_modules/react-native-bluetooth-classic/android/build.gradle
+index 0daf907..6560931 100644
+--- a/node_modules/react-native-bluetooth-classic/android/build.gradle
++++ b/node_modules/react-native-bluetooth-classic/android/build.gradle
+@@ -23,6 +23,10 @@ android {
+         namespace = "kjd.reactnative.bluetooth"
+     }
+ 
++    buildFeatures {
++        buildConfig true
++    }
++    
+     compileSdkVersion getExtOrDefault('compileSdkVersion', 34)
+     buildToolsVersion getExtOrDefault('buildToolsVersion', "34.0.0")
+ 

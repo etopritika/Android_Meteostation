@@ -1,0 +1,17 @@
+export const palette = {
+  background: '#0B1218',
+  surface: '#16202B',
+  surfaceBorder: '#263445',
+  text: '#F4F7FB',
+  textMuted: '#93A1B3',
+  error: '#F87171',
+  logRx: '#4ADE80',
+  logSys: '#FBBF24',
+  accent: '#3C9EFF',
+  onAccent: '#041018',
+  disabledFill: '#1A2532',
+  disabledText: '#667588',
+  bluetoothBadge: '#122033',
+  bluetoothBadgeBorder: '#2A4D73',
+  switchTrackOff: '#2A3544',
+} as const;

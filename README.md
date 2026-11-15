@@ -1,56 +1,117 @@
-# Welcome to your Expo app 👋
+# Android Meteostation
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Android client for an Arduino weather station. It discovers an HC-05 module over Bluetooth Classic, shows temperature and humidity, and controls an LED.
 
-## Get started
+This is an educational project. The Arduino firmware is not included.
 
-1. Install dependencies
+## Features
 
-   ```bash
-   npm install
-   ```
+- Discover an HC-05 and connect over Bluetooth Classic.
+- Monitor temperature and humidity.
+- Control the station LED.
+- Receive automatic readings, or request one on demand.
+- Disconnect, and leave the station screen when a visible connection drops.
+- Open developer diagnostics with service commands and a Bluetooth log.
 
-2. Start the app
+## Tech stack
 
-   ```bash
-   npx expo start
-   ```
+Declared in `package.json`:
 
-In the output, you'll find options to open the app in a
+- React Native 0.88.1
+- Expo SDK 58 (`expo` ~58.0.25) and Expo Router ~58.0.31
+- TypeScript ~6.0.3
+- `react-native-bluetooth-classic` ^1.73.0-rc.17
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+The station is an Arduino Uno with an HC-05 module and a DHT11 sensor. `npm install` runs `patch-package` and applies `patches/react-native-bluetooth-classic+1.73.0-rc.17.patch`.
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Hardware setup
 
-## Get a fresh project
+The firmware and wiring diagram are not in this repository. Verify these intended connections against the sketch you flash. Resistor values are not specified here.
 
-When you're ready, run:
+| Part | Connection |
+| --- | --- |
+| DHT11 data | Arduino D2 |
+| LED | Arduino D7, through a current-limiting resistor |
+| HC-05 TXD | Arduino D10 (software serial RX) |
+| HC-05 RXD | Arduino D11 (software serial TX), through a voltage divider |
+| Power | Module VCC and a shared ground with the Arduino |
 
-```bash
-npm run reset-project
+The phone must support Bluetooth Classic.
+
+## Bluetooth protocol
+
+Messages are newline-delimited. Commands are sent with a trailing `\n`.
+
+```text
+TEMP:27.6;HUM:41
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+| Command | Response | Purpose |
+| --- | --- | --- |
+| `START` | `AUTO:ON` | Enable automatic telemetry |
+| `STOP` | `AUTO:OFF` | Disable automatic telemetry |
+| `GET_DATA` | a `TEMP` / `HUM` line | Request one reading |
+| `LED_ON` | `LED:ON` | Turn the LED on |
+| `LED_OFF` | `LED:OFF` | Turn the LED off |
 
-### Other setup steps
+`START`, `STOP`, and the LED commands wait up to 4 seconds for the matching response. `GET_DATA` does not wait for a separate acknowledgement. `ERROR:DHT11` is not treated as a reading.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+After connecting, the app sends one `START`. The confirmed automatic mode changes only when `AUTO:ON` or `AUTO:OFF` arrives. The station firmware is expected to emit a reading about every two seconds while automatic mode is on. That interval is not set by this app.
 
-## Learn more
+## Getting started
 
-To learn more about developing your project with Expo, look at the following resources:
+Expo Go does not include the Bluetooth Classic module. Install a development build or the release APK below.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+1. Install dependencies with `npm install`.
+2. Flash the station firmware, then power the Arduino and HC-05.
+3. Pair HC-05 in Android Bluetooth settings. The app looks for the name `HC-05`, bonded devices first, and does not store a PIN.
+4. Install a native Android build.
+5. Open the app, grant the Bluetooth permission, and connect.
 
-## Join the community
+## Development and Android builds
 
-Join our community of developers creating universal apps.
+A development build contains the native module and still needs Metro:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx eas-cli@latest build --platform android --profile development
+npx expo start --dev-client
+```
+
+`production` in `eas.json` keeps `autoIncrement` and sets the Android build type to `apk`. It does not enable the development client, so the result is a release APK that does not use Metro. In that build, `__DEV__` is false.
+
+```bash
+npx eas-cli@latest build --platform android --profile production
+```
+
+`eas-cli` is not a project dependency. Typecheck with `npx tsc --noEmit`.
+
+## Project structure
+
+```text
+src/app/          Connect, station, and Debug screens
+src/bluetooth/    Socket, protocol, TEMP/HUM parser, in-memory log
+src/components/   Shared UI and Debug panels
+src/hooks/        HC-05 discovery and Debug unlock
+src/constants/    User-facing strings
+src/theme/        Colors and spacing
+patches/          Bluetooth Classic build patch
+app.json          Android package and permissions
+eas.json          Build profiles
+```
+
+`android/` is generated for a native build. Do not edit it by hand.
+
+## Debugging
+
+Debug has two tabs. Controls shows the connection and sends `START`, `STOP`, and `GET_DATA`. Logs stores the latest 150 entries in memory, in the categories `TX`, `RX`, `SYS`, and `ERR`. Filtering does not delete entries. Clear does not disconnect. Share uses the Android share sheet and does not add Bluetooth addresses.
+
+The Debug button is always shown in development. In a release build, tap the title `Метеостанція` five times within four seconds. The unlock lasts until the process ends. It is a developer convenience, not a security control.
+
+## Known limitations
+
+- A dropped connection is not restored automatically.
+- The Debug log is kept only in memory.
+
+## License
+
+The root `LICENSE` file is the MIT License text from the Expo application template, copyright 650 Industries, Inc. This repository does not add a separate license for the weather-station application.

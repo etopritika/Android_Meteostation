@@ -71,11 +71,13 @@ export default function StationScreen() {
             <Text style={styles.ledHint}>{ledHint}</Text>
           </View>
           <Switch
-            pointerEvents="none"
             importantForAccessibility="no"
             accessibilityElementsHidden
             value={ledState === true}
             disabled={ledDisabled}
+            onValueChange={(next) => {
+              void changeLed(next);
+            }}
             trackColor={{ false: palette.switchTrackOff, true: palette.accent }}
             thumbColor={ledState ? palette.text : palette.textMuted}
           />
